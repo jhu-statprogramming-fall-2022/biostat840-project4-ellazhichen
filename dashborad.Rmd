@@ -131,14 +131,14 @@ It is unpredictable that COVID has last for almost 2 year. And I want to know mo
 **Video**
 
 <iframe
-    width="640"
-    height="480"
-    src="https://www.youtube.com/watch?v=aAkMkVFwAoo"
+    width="560"
+    height="315"
+    src="https://www.youtube.com/embed/1VG7TOHaS0k"
     frameborder="0"
     allow="autoplay; encrypted-media"
-    allowfullscreen
->
+    allowfullscreen>
 </iframe>
+
 
 Column {data-width=30}
 -------------------------------------
