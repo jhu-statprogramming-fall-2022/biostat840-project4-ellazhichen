@@ -1,0 +1,329 @@
+---
+title: "COVID-19 Dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+    source_code: embed
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(rsconnect)
+library(flexdashboard)
+library(rmarkdown)
+library(DT)
+library(shiny)
+library(knitr)
+library(scales)
+library(gridExtra)
+library(ggplot2)
+library(here)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(purrr)
+library(jsonlite)
+library(httr)
+library(tidycensus)
+library(leaflet)
+library(lubridate)
+```
+
+```{r}
+# tests if a directory named "data" exists locally
+if(!dir.exists(here("data"))) { dir.create(here("data")) }
+
+# saves data only once (not each time you knit a R Markdown)
+if(!file.exists(here("data","MD_Covid.RDS"))) {
+  ## extract my API from `.Renviron`
+  covid_key <- Sys.getenv("covid")
+
+  ## build the URL
+  base <- 'https://api.covidactnow.org/v2/state/'
+  state1 <- 'MD'
+  state2 <- 'MN'
+  state3 <- 'CA'
+  info_key <- '.timeseries.json?apiKey='
+
+  ## put it all together
+  ## build the URL
+  MD_URL <- paste0(base, state1, info_key, covid_key)
+  MN_URL <- paste0(base, state2, info_key, covid_key)
+  CA_URL <- paste0(base, state3, info_key, covid_key)
+  
+  MD_raw_data <- GET(MD_URL)
+  MN_raw_data <- GET(MN_URL)
+  CA_raw_data <- GET(CA_URL)
+  
+  md_data <- fromJSON(rawToChar(MD_raw_data$content), flatten = TRUE)
+  mn_data <- fromJSON(rawToChar(MN_raw_data$content), flatten = TRUE)
+  ca_data <- fromJSON(rawToChar(CA_raw_data$content), flatten = TRUE)
+  
+  md = md_data$actualsTimeseries
+  mn = mn_data$actualsTimeseries
+  ca = ca_data$actualsTimeseries
+  
+  # save the file to RDS objects
+  saveRDS(md, file= here("data","MD_Covid.RDS"))
+  saveRDS(mn, file= here("data","MN_Covid.RDS"))
+  saveRDS(ca, file= here("data","CA_Covid.RDS"))
+}
+```
+
+```{r}
+md = readRDS(here("data","MD_Covid.RDS"))
+mn = readRDS(here("data","MN_Covid.RDS"))
+ca = readRDS(here("data","CA_Covid.RDS"))
+
+md_cd = md %>% select(cases, deaths, date) %>% mutate(state = "MD")
+mn_cd = mn %>% select(cases, deaths, date) %>% mutate(state = "MN")
+ca_cd = ca %>% select(cases, deaths, date) %>% mutate(state = "CA")
+
+md_cd$date = ymd(md_cd$date)
+mn_cd$date = ymd(mn_cd$date)
+ca_cd$date = ymd(ca_cd$date)
+```
+
+```{r}
+md_cd20 = md_cd %>% filter(str_detect(md_cd$date, "2020") == TRUE) %>% mutate(Year = 2020)
+mn_cd20 = mn_cd %>% filter(str_detect(mn_cd$date, "2020") == TRUE) %>% mutate(Year = 2020)
+ca_cd20 = ca_cd %>% filter(str_detect(ca_cd$date, "2020") == TRUE) %>% mutate(Year = 2020)
+three20 = rbind(md_cd20, mn_cd20, ca_cd20)
+```
+
+```{r}
+md_cd21 = md_cd %>% filter(str_detect(md_cd$date, "2021") == TRUE) %>% mutate(Year = 2021)
+mn_cd21 = mn_cd %>% filter(str_detect(mn_cd$date, "2021") == TRUE) %>% mutate(Year = 2021) 
+ca_cd21 = ca_cd %>% filter(str_detect(ca_cd$date, "2021") == TRUE) %>% mutate(Year = 2021)
+three21 = rbind(md_cd21, mn_cd21, ca_cd21)
+```
+
+```{r}
+md_cd22 = md_cd %>% filter(str_detect(md_cd$date, "2022") == TRUE) %>% mutate(Year = 2022)
+mn_cd22 = mn_cd %>% filter(str_detect(mn_cd$date, "2022") == TRUE) %>% mutate(Year = 2022)
+ca_cd22 = ca_cd %>% filter(str_detect(ca_cd$date, "2022") == TRUE) %>% mutate(Year = 2022)
+three22 = rbind(md_cd22, mn_cd22, ca_cd22)
+```
+
+```{r}
+md_cd_year = rbind(md_cd20, md_cd21, md_cd22)
+mn_cd_year = rbind(mn_cd20, mn_cd21, mn_cd22)
+ca_cd_year = rbind(ca_cd20, ca_cd21, ca_cd22)
+three_cd_year = rbind(md_cd_year, mn_cd_year, ca_cd_year)
+```
+
+
+About {data-icon="fa-question-circle"}
+===================================== 
+
+Column {data-width="70"}
+-------------------------------------
+
+### 
+
+**Motivation and Overview**
+
+It is unpredictable that COVID has last for almost 2 year. And I want to know more about the pandemic, so I chose Maryland in the east, Minnesota in the middle, and California in the west to explore the COVID related data in these 3 states. I compared the severity of the epidemic in the three states by looking at their confirmed cases in 2020, 2021, and 2022.
+
+###
+
+**Video**
+
+<iframe
+    width="640"
+    height="480"
+    src="https://www.youtube.com/watch?v=aAkMkVFwAoo"
+    frameborder="0"
+    allow="autoplay; encrypted-media"
+    allowfullscreen
+>
+</iframe>
+
+Column {data-width=30}
+-------------------------------------
+
+### COVID Apperance
+
+```{r, echo=FALSE}
+knitr::include_graphics(here::here("covid.jpeg"))
+```
+
+
+The Data {data-icon="fa-database"}
+===================================== 
+
+Column {data-width="70"}
+-------------------------------------
+
+### 
+
+The data used in this dashboard is requested from the API at [**COVID Act Now**](https://covidactnow.org/data-api)
+
+This API provides access to COVID data tracking US states, counties, and metros, including data and metrics for cases, vaccinations, tests, hospitalizations, and deaths.
+
+```{r, echo=FALSE}
+# Create the DT table first
+DT_table <- three_cd_year %>%
+  rename("Confirmed Cases" = cases) %>% 
+  rename("Deaths Cases" = deaths)%>% 
+  rename("State" = state) %>% 
+  rename("Date" = date)
+# Instead of depending on the st_jitter algorithm to generate random placement, a custom function placing the points side by side at a set distance could be used to make points occuring at the same location appear neatly apart.
+```
+
+```{r, echo=FALSE}
+DT::renderDataTable({
+  DT::datatable(DT_table)
+})
+```
+
+
+3 States Statistics {data-icon="fa-flag"}
+===================================== 
+
+Column {data-width=700 .tabset .tabset-fade}
+-------------------------------------
+
+### Maryland
+
+```{r}
+md_cd_year %>% ggplot(aes(x = date, y = cases/1000)) + 
+  geom_line(color = "steelblue") + labs(
+    title = "Cumulative Number of Confirmed Cases in MD",
+    x = "Date",
+    y = "# of Cases(in Thousand)"
+  )  +
+  theme(plot.title = element_text(color="steelblue", face="bold", size = 15))
+```
+
+
+### Minnesota
+
+```{r}
+mn_cd_year %>% ggplot(aes(x = date, y = cases/1000)) + 
+  geom_line(color = "steelblue") + labs(
+    title = "Cumulative Number of Confirmed Cases in MN",
+    x = "Date",
+    y = "# of Cases(in Thousand)"
+  )  +
+  theme(plot.title = element_text(color="steelblue", face="bold", size = 15))
+```
+
+### California
+
+```{r}
+ca_cd_year %>% ggplot(aes(x = date, y = cases/1000)) + 
+  geom_line(color = "steelblue") + labs(
+    title = "Cumulative Number of Confirmed Cases in CA",
+    x = "Date",
+    y = "# of Cases(in Thousand)"
+  )  +
+  theme(plot.title = element_text(color="steelblue", face="bold", size = 15))
+```
+
+Column {data-width=300}
+------------------------------------- 
+
+
+
+
+### **Total Confirmed Cases**
+    
+```{r}
+valueBox(value = sum(c(max(md_cd22$cases, na.rm = TRUE), 
+                       max(mn_cd22$cases, na.rm = TRUE), 
+                       max(ca_cd22$cases, na.rm = TRUE))),color = "white")
+```
+
+### **Total Deaths**
+```{r}
+valueBox(value = sum(c(max(md_cd22$deaths, na.rm = TRUE), 
+                       max(mn_cd22$deaths, na.rm = TRUE), 
+                       max(ca_cd22$deaths, na.rm = TRUE))),color = "white")
+```
+
+1 State Statistics {data-icon=fa-flag-checkered}
+===================================== 
+
+Column {.sidebar data-width=300}
+-----------------------------------------------------------------------
+
+Select the state and the year that you want to 
+
+```{r}
+selectInput(inputId = "state_selected", 
+              label = "Select a state to explore:",
+            choices = three_cd_year %>% 
+              pull(state) %>% 
+              unique() %>%
+              sort(), selected = "MD")
+selectInput(inputId = "year_selected", 
+              label = "Select a Year to explore:",
+            choices = three_cd_year %>% 
+              pull(Year) %>% 
+              unique() %>%
+              sort(), selected = "2020")
+#selectInput(inputId = "type_selected", 
+              #label = "Confirmed Cases or Deaths:",
+            #choices = c("cases", "deaths"),
+            #selected = "cases")
+```
+
+
+Column {data-width=600 .tabset .tabset-fade}
+-----------------------------------------------------------------------
+
+### Confirmed Caese
+
+```{r}
+renderPlot({
+  three_cd_year %>% filter(Year == input$year_selected & state == input$state_selected) %>%
+    ggplot(aes(x = date, y = cases/1000)) + geom_line(color = "steelblue") +
+    labs(
+      title = paste("Cumulative Number of Confirmed Cases for Year ", 
+                    input$year_selected, "in ", input$state_selected),
+      x = "Date",
+      y = paste("# of cases (in Thousand)")) +
+    theme(plot.title = element_text(color="steelblue", face="bold", size = 30),
+          axis.text = element_text(size = 15),
+          axis.title=element_text(size=20,face="bold"))
+})
+```
+
+
+### Died Caese
+
+```{r}
+renderPlot({
+  three_cd_year %>% filter(Year == input$year_selected & state == input$state_selected) %>%
+    ggplot(aes(x = date, y = deaths/1000)) + geom_line(color = "steelblue") +
+    labs(
+      title = paste("Cumulative Number of Confirmed Cases for Year ", 
+                    input$year_selected, "in ", input$state_selected),
+      x = "Date",
+      y = paste("# of Deaths (in Thousand)")) +
+    theme(plot.title = element_text(color="steelblue", face="bold", size = 30),
+          axis.text = element_text(size = 15),
+          axis.title=element_text(size=20,face="bold"))
+})
+```
+
+
+Analysis & Summary {data-icon="fa-database"}
+===================================== 
+
+Column {data-width="70"}
+-------------------------------------
+
+### 
+
+As we can see there are much more people got COVID in CA than other two states. I am not surprised about that since LA and SF are two big and modern cities in CA, there are more chances for people to interact with each other. And the death rate is not high and decreases.
+
+
+
+
+
+
+
+
